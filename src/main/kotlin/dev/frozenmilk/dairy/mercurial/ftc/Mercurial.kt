@@ -1,202 +1,216 @@
 package dev.frozenmilk.dairy.mercurial.ftc
 
+import com.qualcomm.ftccommon.FtcEventLoop
+import com.qualcomm.robotcore.eventloop.opmode.OpModeManagerImpl
+import dev.frozenmilk.sinister.sdk.apphooks.OnCreateEventLoop
+import dev.frozenmilk.sinister.sdk.opmodes.SinisterRegisteredOpModes
 import org.firstinspires.ftc.robotcore.internal.opmode.OpModeMeta
 
 object Mercurial {
-	class RegisterableProgram(
-		val name: String?,
-		val group: String?,
-		val type: OpModeMeta.Flavor,
-		val program: Program,
-	)
+    fun interface Program {
+        fun Context.exec()
+    }
 
-	fun interface Program {
-		fun exec(context: Context)
-	}
+    fun interface PipelineProgram {
+        fun Context.exec(): Program
+    }
 
-	object UntypedProgramBuilder {
-		fun withType(type: OpModeMeta.Flavor) = ProgramBuilder(type)
-	}
+    class RegisterableProgram(
+        val name: String?,
+        val group: String?,
+        val type: OpModeMeta.Flavor,
+        val transitionTarget: ((name: String) -> String)?,
+        val program: Program,
+    )
 
-	class ProgramBuilder(
-		val type: OpModeMeta.Flavor,
-		val name: String? = null,
-		val group: String? = null,
-	) {
-		fun withName(name: String) = ProgramBuilder(
-			type,
-			name,
-			group,
-		)
+    object UntypedProgramBuilder {
+        fun withType(type: OpModeMeta.Flavor) = ProgramBuilder(type)
+    }
 
-		fun withGroup(group: String) = ProgramBuilder(
-			type,
-			name,
-			group,
-		)
+    class ProgramBuilder(
+        val type: OpModeMeta.Flavor,
+        val name: String? = null,
+        val group: String? = null,
+        val transitionTarget: ((name: String) -> String)? = null,
+    ) {
+        fun withName(name: String) = ProgramBuilder(
+            type,
+            name,
+            group,
+            transitionTarget,
+        )
 
-		fun withProgram(program: Program) = RegisterableProgram(
-			name,
-			group,
-			type,
-			program,
-		)
-	}
+        fun withGroup(group: String) = ProgramBuilder(
+            type,
+            name,
+            group,
+            transitionTarget,
+        )
 
-	@JvmStatic
-	fun buildProgram() = UntypedProgramBuilder
+        fun withTransitionTarget(transitionTarget: (name: String) -> String) = ProgramBuilder(
+            type,
+            name,
+            group,
+            transitionTarget,
+        )
 
-	//
-	// TeleOp
-	//
+        fun withProgram(program: Program) = RegisterableProgram(
+            name,
+            group,
+            type,
+            transitionTarget,
+            program,
+        )
+    }
 
-	@JvmStatic
-	fun teleop(program: Program) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.TELEOP)
-		// program
-		.withProgram(program)
+    @JvmStatic
+    fun buildProgram() = UntypedProgramBuilder
 
-	@JvmStatic
-	fun teleop(
-		name: String,
-		program: Program,
-	) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.TELEOP)
-		// name
-		.withName(name)
-		// program
-		.withProgram(program)
+    //
+    // TeleOp
+    //
 
-	@JvmStatic
-	fun teleop(
-		name: String,
-		group: String,
-		program: Program,
-	) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.TELEOP)
-		// name
-		.withName(name)
-		// group
-		.withName(group)
-		// program
-		.withProgram(program)
+    @JvmStatic
+    fun teleop(program: Program) = buildProgram() //
+        .withType(OpModeMeta.Flavor.TELEOP) //
+        .withProgram(program)
 
-	@JvmSynthetic
-	fun teleop(program: Context.() -> Unit) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.TELEOP)
-		// program
-		.withProgram(program)
+    @JvmStatic
+    fun teleop(
+        name: String,
+        program: Program,
+    ) = buildProgram() //
+        .withType(OpModeMeta.Flavor.TELEOP) //
+        .withName(name) //
+        .withProgram(program)
 
-	@JvmSynthetic
-	fun teleop(
-		name: String,
-		program: Context.() -> Unit,
-	) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.TELEOP)
-		// name
-		.withName(name)
-		// program
-		.withProgram(program)
+    @JvmStatic
+    fun teleop(
+        name: String,
+        group: String,
+        program: Program,
+    ) = buildProgram() //
+        .withType(OpModeMeta.Flavor.TELEOP) //
+        .withName(name) //
+        .withGroup(group) //
+        .withProgram(program)
 
+    //
+    // Autonomous
+    //
 
-	@JvmSynthetic
-	fun teleop(
-		name: String,
-		group: String,
-		program: Context.() -> Unit,
-	) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.TELEOP)
-		// name
-		.withName(name)
-		// group
-		.withName(group)
-		// program
-		.withProgram(program)
+    @JvmStatic
+    fun autonomous(program: Program) = buildProgram() //
+        .withType(OpModeMeta.Flavor.AUTONOMOUS) //
+        .withProgram(program)
 
-	//
-	// Autonomous
-	//
+    @JvmStatic
+    fun autonomous(
+        name: String,
+        program: Program,
+    ) = buildProgram() //
+        .withType(OpModeMeta.Flavor.AUTONOMOUS) //
+        .withName(name) //
+        .withProgram(program)
 
-	@JvmStatic
-	fun autonomous(program: Program) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.AUTONOMOUS)
-		// program
-		.withProgram(program)
+    @JvmStatic
+    fun autonomous(
+        name: String,
+        group: String,
+        program: Program,
+    ) = buildProgram() //
+        .withType(OpModeMeta.Flavor.AUTONOMOUS) //
+        .withName(name) //
+        .withGroup(group) //
+        .withProgram(program)
 
-	@JvmStatic
-	fun autonomous(
-		name: String,
-		program: Program,
-	) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.AUTONOMOUS)
-		// name
-		.withName(name)
-		// program
-		.withProgram(program)
+    //
+    // Pipeline Autonomous
+    //
 
-	@JvmStatic
-	fun autonomous(
-		name: String,
-		group: String,
-		program: Program,
-	) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.AUTONOMOUS)
-		// name
-		.withName(name)
-		// group
-		.withName(group)
-		// program
-		.withProgram(program)
+    private object OpModeManager : OnCreateEventLoop {
+        var opModeManager: OpModeManagerImpl? = null
+        override fun onCreateEventLoop(
+            context: android.content.Context,
+            ftcEventLoop: FtcEventLoop,
+        ) {
+            opModeManager = ftcEventLoop.opModeManager
+        }
+    }
 
-	@JvmSynthetic
-	fun autonomous(program: Context.() -> Unit) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.AUTONOMOUS)
-		// program
-		.withProgram(program)
+    private fun pipelineName(name: String) = "$name |> teleop"
 
-	@JvmSynthetic
-	fun autonomous(
-		name: String,
-		program: Context.() -> Unit,
-	) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.AUTONOMOUS)
-		// name
-		.withName(name)
-		// program
-		.withProgram(program)
+    fun liftPipeLine(program: PipelineProgram) = Program {
+        val name = pipelineName(metadata.name)
+        val metadata = OpModeMeta.Builder() //
+            .setName("$$name$") //
+            .setSystemOpModeBaseDisplayName(name) //
+            .setTransitionTarget(metadata.name) //
+            .setFlavor(OpModeMeta.Flavor.SYSTEM) //
+            .build()
 
+        try {
+            val nextProgram = program.run { exec() }
 
-	@JvmSynthetic
-	fun autonomous(
-		name: String,
-		group: String,
-		program: Context.() -> Unit,
-	) = buildProgram()
-		// type
-		.withType(OpModeMeta.Flavor.AUTONOMOUS)
-		// name
-		.withName(name)
-		// group
-		.withName(group)
-		// program
-		.withProgram(program)
+            // register temporary opmode
+            SinisterRegisteredOpModes.register(metadata) {
+                MercurialProgramScanner.MercurialProgramConverter(
+                    metadata
+                ) {
+                    try {
+                        nextProgram.run { exec() }
+                    } finally {
+                        SinisterRegisteredOpModes.unregister(metadata)
+                    }
+                }
+            }
 
-	fun interface ProgramRegistrationHelper {
-		fun register(program: RegisterableProgram)
-	}
+            // immediately switch to it
+            OpModeManager.opModeManager?.initOpMode(metadata.name)
+        } catch (e: Throwable) {
+            SinisterRegisteredOpModes.unregister(metadata)
+            throw e
+        }
+    }
 
-	fun interface ProgramRegistrar {
-		fun register(helper: ProgramRegistrationHelper)
-	}
+    @JvmStatic
+    fun pipelineAutonomous(program: PipelineProgram) = buildProgram() //
+        .withType(OpModeMeta.Flavor.AUTONOMOUS) //
+        .withProgram(liftPipeLine(program))
+
+    @JvmStatic
+    fun pipelineAutonomous(
+        name: String,
+        program: PipelineProgram,
+    ) = buildProgram() //
+        .withType(OpModeMeta.Flavor.AUTONOMOUS) //
+        .withName(name) //
+        .withProgram(liftPipeLine(program))
+
+    @JvmStatic
+    fun autonomous(
+        name: String,
+        group: String,
+        program: PipelineProgram,
+    ) = buildProgram() //
+        .withType(OpModeMeta.Flavor.AUTONOMOUS) //
+        .withName(name) //
+        .withGroup(group) //
+        .withProgram(liftPipeLine(program))
+
+    //
+    // Manual Registration
+    //
+
+    fun interface ProgramRegistrationHelper {
+        fun register(program: RegisterableProgram)
+    }
+
+    /**
+     * static instances of [ProgramRegistrar] will be found by Sloth
+     * and [register] will be called when the robot starts up
+     */
+    fun interface ProgramRegistrar {
+        fun register(helper: ProgramRegistrationHelper)
+    }
 }
