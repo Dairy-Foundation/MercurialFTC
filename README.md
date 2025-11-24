@@ -8,7 +8,7 @@ Take a look at the [Java](./JavaExamples/src/main/java/org/firstinspires/ftc/tea
 or the [Kotlin](./KotlinExamples/src/main/kotlin/org/firstinspires/ftc/teamcode/beginners/README.md)
 Documentation.
 
-This library serves to provide bindings to assist in using Mercurial with 
+This library serves to provide bindings to assist in using Mercurial with
 the FTC SDK, it is considered unstable, as it will be replaced by the Dairy SDK.
 
 This library also provides examples for using Mercurial.
@@ -32,7 +32,7 @@ repositories {
 
 ```groovy
 dependencies {
-    implementation("dev.frozenmilk.dairy:MercurialFTC:2.0.0-beta1")
+    implementation("dev.frozenmilk.dairy:MercurialFTC:2.0.0-beta2")
 }
 ```
 
