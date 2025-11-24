@@ -23,7 +23,7 @@ public class Registers {
             VarRegister<Integer> count = env.variable(() -> 0);
             return loop(
                     () -> count.get() < 20,
-                    exec(() -> count.set(count.get() + 1))
+                    exec(() -> count.map(x -> x + 1))
             );
         });
         // `count` is data that is now available only in the scope of the scope block
@@ -47,7 +47,7 @@ public class Registers {
             VarRegister<Integer> count = env.variable(() -> 0);
             return loop(
                     () -> count.get() < 20,
-                    exec(() -> count.set(count.get() + 1))
+                    exec(() -> count.map(x -> x + 1))
             );
         });
 
@@ -80,9 +80,9 @@ public class Registers {
                     () -> count.get() < 20,
                     ifHuh(
                             () -> count.get() < 10,
-                            exec(() -> count.set(count.get() + 2))
+                            exec(() -> count.map(x -> x + 2))
                     ).elseHuh(
-                            exec(() -> count.set(count.get() + 1))
+                            exec(() -> count.map(x -> x + 1))
                     )
             );
         });
@@ -105,7 +105,7 @@ public class Registers {
                             exec(() -> {
                                 System.out.println(count);
                                 System.out.println(countPlus1.get());
-                                countPlus1.set(countPlus1.get() + 1);
+                                countPlus1.map(x -> x + 1);
                             })
                     )
             );
@@ -136,6 +136,6 @@ public class Registers {
 
     // note that we didn't use scope here
     static Closure increaseCount(VarRegister<Integer> count) {
-        return exec(() -> count.set(count.get() + 1));
+        return exec(() -> count.map(x -> x + 1));
     }
 }
