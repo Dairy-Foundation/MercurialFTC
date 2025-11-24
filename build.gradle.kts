@@ -25,7 +25,7 @@ repositories {
 
 dependencies {
     api("dev.frozenmilk.sinister:Sloth:0.2.4")
-    api("dev.frozenmilk.dairy:Mercurial:2.0.0-beta0")
+    api("dev.frozenmilk.dairy:Mercurial:2.0.0-beta2")
     api("org.jetbrains.kotlin:kotlin-reflect")
 }
 
