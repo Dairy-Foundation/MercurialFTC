@@ -124,9 +124,10 @@ TODO
 
 ## Example Files
 Recommended reading order:
-1. Closures
-2. MyFirstMercurialOpMode
-3. Registers
-4. MyFirstMercurialTeleOp
-5. Closures2
-6. MyFirstMercurialAuto
+1. ReinventingMercurialFromFirstPrinciples
+2. Closures
+3. MyFirstMercurialOpMode
+4. Registers
+5. MyFirstMercurialTeleOp
+6. Closures2
+7. MyFirstMercurialAuto
