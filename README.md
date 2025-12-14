@@ -32,7 +32,7 @@ repositories {
 
 ```groovy
 dependencies {
-    implementation("dev.frozenmilk.dairy:MercurialFTC:2.0.0-beta6")
+    implementation("dev.frozenmilk.dairy:MercurialFTC:2.0.0-beta7")
 }
 ```
 
