@@ -3,6 +3,9 @@ package dev.frozenmilk.dairy.mercurial.ftc
 import com.qualcomm.robotcore.hardware.Gamepad
 import com.qualcomm.robotcore.hardware.HardwareMap
 import dev.frozenmilk.dairy.mercurial.continuations.Continuations
+import dev.frozenmilk.dairy.mercurial.continuations.Continuations.exec
+import dev.frozenmilk.dairy.mercurial.continuations.Continuations.loop
+import dev.frozenmilk.dairy.mercurial.continuations.Continuations.scope
 import dev.frozenmilk.dairy.mercurial.continuations.Fiber
 import dev.frozenmilk.dairy.mercurial.continuations.IntoContinuation
 import dev.frozenmilk.dairy.mercurial.continuations.Scheduler
@@ -58,17 +61,27 @@ open class Context(
     //
 
     /**
-     * adds a rising edge filter to [cond]
+     * adds a rising edge filter to [cond], with a 1ms debounce
      */
-    fun risingEdge(cond: BooleanSupplier) = object : BooleanSupplier {
+    fun risingEdge(clock: Continuations.Clock, cond: BooleanSupplier) = object : BooleanSupplier {
         private var prev = false
+        private var debounceTimer = clock.getTime()
+        // NOTE: we seem to need a 1ms debounce
+        private val duration = clock.convSeconds(0.001)
         override fun getAsBoolean(): Boolean {
             val next = cond.asBoolean
-            val res = !prev && next
-            prev = next
+            if (!next) debounceTimer = clock.getTime()
+            val debounced = clock.done(debounceTimer, duration)
+            val res = next && !prev
+            prev = next && debounced
             return res
         }
     }
+
+    /**
+     * adds a rising edge filter to [cond], with a 10ms debounce
+     */
+    fun risingEdge(cond: BooleanSupplier) = risingEdge(Continuations.Clock.Standard, cond)
 
     /**
      * immediately schedules [k]
@@ -88,13 +101,13 @@ open class Context(
     ) = run {
         val k = k.intoContinuation()
         scheduler.schedule(
-            Continuations.scope {
+            scope {
                 val fiber = variable<Fiber?> { null }
-                Continuations.loop(Continuations.exec {
+                loop(exec {
                     if (cond.asBoolean) fiber.map { fiber ->
                         if (fiber == null) scheduler.schedule(k)
                         else {
-                            Fiber.Companion.CANCEL(fiber)
+                            Fiber.CANCEL(fiber)
                             scheduler.schedule(k)
                         }
                     }
@@ -115,8 +128,9 @@ open class Context(
     ) = run {
         val k = k.intoContinuation()
         scheduler.schedule(
-            Continuations.loop(Continuations.exec { if (cond.asBoolean) scheduler.schedule(k) })
-                .intoContinuation()
+            loop(exec {
+                if (cond.asBoolean) scheduler.schedule(k)
+            }).intoContinuation()
         )
     }
 
@@ -131,13 +145,15 @@ open class Context(
     ) = run {
         val k = k.intoContinuation()
         scheduler.schedule(
-            Continuations.scope {
+            scope {
                 val fiber = variable<Fiber?> { null }
-                Continuations.loop(Continuations.exec {
-                    if (cond.asBoolean) fiber.set(scheduler.schedule(k))
-                    else fiber.map { fiber ->
-                        if (fiber != null) Fiber.CANCEL(fiber)
-                        null
+                loop(exec {
+                    fiber.map { fiber ->
+                        if (cond.asBoolean && fiber == null) scheduler.schedule(k)
+                        else {
+                            if (fiber != null) Fiber.CANCEL(fiber)
+                            null
+                        }
                     }
                 })
             }.intoContinuation()
