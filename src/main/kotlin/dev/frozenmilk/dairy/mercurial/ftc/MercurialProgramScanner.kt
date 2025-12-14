@@ -23,8 +23,8 @@ object MercurialProgramScanner : OpModeScanner() {
             val context = Context(
                 metadata,
                 {
-                    if (isStarted) if (isStopRequested) State.STOP
-                    else State.LOOP
+                    if (isStopRequested) State.STOP
+                    else if (isStarted) State.LOOP
                     else State.INIT
                 },
                 scheduler,
