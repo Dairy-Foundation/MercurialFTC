@@ -4,12 +4,10 @@
 
 [Mercurial](https://github.com/Dairy-Foundation/Mercurial/tree/continuations) 2.0 is currently in beta!
 
-Take a look at the [Java](./JavaExamples/src/main/java/org/firstinspires/ftc/teamcode/beginners/README.md)
-or the [Kotlin](./KotlinExamples/src/main/kotlin/org/firstinspires/ftc/teamcode/beginners/README.md)
-Documentation.
+Start by taking a look at [the introduction](./introduction.md)
 
 This library serves to provide bindings to assist in using Mercurial with
-the FTC SDK, it is considered unstable, as it will be replaced by the Dairy SDK.
+the FTC SDK.
 
 This library also provides examples for using Mercurial.
 
@@ -32,7 +30,7 @@ repositories {
 
 ```groovy
 dependencies {
-    implementation("dev.frozenmilk.dairy:MercurialFTC:2.0.0-beta9")
+    implementation("dev.frozenmilk.dairy:MercurialFTC:2.0.1-beta0")
 }
 ```
 

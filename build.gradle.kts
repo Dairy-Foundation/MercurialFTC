@@ -1,32 +1,31 @@
 plugins {
-    id("dev.frozenmilk.android-library") version "10.3.0-0.1.4"
-    id("dev.frozenmilk.publish") version "0.0.5"
-    id("dev.frozenmilk.doc") version "0.0.5"
-    id("dev.frozenmilk.build-meta-data") version "0.0.2"
+    id("dev.frozenmilk.android-library") version "12.0.0-1.2.2"
+    id("dev.frozenmilk.publish") version "0.1.0"
+    id("dev.frozenmilk.doc") version "0.1.0"
+    id("dev.frozenmilk.build-meta-data") version "0.1.0"
 }
 
 android.namespace = "dev.frozenmilk.dairy"
 
 // Most FTC libraries will want the following
 ftc {
-    kotlin // if you don't want to use kotlin, remove this
+    kotlin()
 
     sdk {
-        RobotCore
-        FtcCommon {
-            configurationNames += "testImplementation"
-        }
+        compileOnly(RobotCore)
+        compileOnly(FtcCommon)
+        compileOnly(Hardware)
+    }
+
+    dairy {
+        api(Sloth("0.3.2"))
+        api(Mercurial("2.0.1-beta0"))
     }
 }
 
-repositories {
-    maven("https://repo.dairy.foundation/releases")
-}
-
 dependencies {
-    api("dev.frozenmilk.sinister:Sloth:0.2.4")
-    api("dev.frozenmilk.dairy:Mercurial:2.0.0-beta8")
     api("org.jetbrains.kotlin:kotlin-reflect")
+    compileOnly("com.pedropathing:core:3.0.1")
 }
 
 meta {
