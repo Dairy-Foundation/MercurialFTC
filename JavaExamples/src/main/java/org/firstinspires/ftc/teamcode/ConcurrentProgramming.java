@@ -574,7 +574,7 @@ public class ConcurrentProgramming {
         );
     }
 
-    // next, look at OpModes.kt for information on OpModes,
+    // next, look at OpModes.java for information on OpModes,
     // Mercurial takes a very different approach to OpModes in comparison to the base SDK
 
     // ignore:
