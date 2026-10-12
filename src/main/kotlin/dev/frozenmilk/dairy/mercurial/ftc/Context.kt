@@ -12,7 +12,9 @@ open class Context(
     @get:JvmName("metadata") val metadata: OpModeMeta,
     private val stateSupplier: Supplier<State>,
     @get:JvmName("hardwareMap") val hardwareMap: HardwareMap,
-    @get:JvmName("telemetry") val telemetry: Telemetry,
+    @get:JvmName("telemetry")
+    @set:JvmName("telemetry")
+    var telemetry: Telemetry,
     @get:JvmName("gamepadD") val gamepadD: GamepadD,
     @get:JvmName("gamepad1") val gamepad1: Gamepad,
     @get:JvmName("gamepad2") val gamepad2: Gamepad,
