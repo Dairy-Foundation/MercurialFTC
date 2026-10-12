@@ -90,8 +90,8 @@ class GamepadD : EventManager<Delta>() {
         constructor(gamepad: Gamepad) : this(
             gamepad.left_stick_x.toDouble(),
             gamepad.left_stick_y.toDouble(),
-            gamepad.right_stick_y.toDouble(),
             gamepad.right_stick_x.toDouble(),
+            gamepad.right_stick_y.toDouble(),
             gamepad.dpad_up,
             gamepad.dpad_down,
             gamepad.dpad_left,
