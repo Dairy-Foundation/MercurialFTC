@@ -1,90 +1,48 @@
 package org.firstinspires.ftc.teamcode.examplerobot;
 
-import androidx.annotation.NonNull;
 
 import com.pedropathing.localization.MotionState;
-import com.pedropathing.math.Pose;
+import com.pedropathing.math.Vector2D;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
-import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.jetbrains.annotations.NotNull;
 
+import dev.frozenmilk.dairy.mercurial.ftc.Context;
 import dev.frozenmilk.dairy.mercurial.processes.Channel;
-import dev.frozenmilk.dairy.mercurial.processes.EventManager;
-import dev.frozenmilk.dairy.mercurial.processes.EventManager.EventHandled;
-import dev.frozenmilk.dairy.mercurial.processes.StateMachine;
+import dev.frozenmilk.dairy.mercurial.processes.SwitchedStateMachine;
 
-public class Shooter extends StateMachine {
-    private final DcMotorEx motor;
-
-    public Shooter(
-        HardwareMap hardwareMap,
-        EventManager<MotionState> localizationEventManager
-    ) {
-        motor = hardwareMap.get(DcMotorEx.class, "shooter");
-        motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        // we tell the localiser to send events to us
-        localizationEventManager.addHandler(motionStateForwarder);
-    }
-
+public class Shooter extends SwitchedStateMachine {
     // the channel we will receive motion states into
-    private final Channel<MotionState> motionStates = Channel.single();
-
-    // we need the ability to switch modes
-    private final Channel<Mode> switches = Channel.single();
-
-    // a fixed power
-    private class Fixed implements Mode {
-        public final double power;
-
-        public Fixed(double power) {
-            this.power = power;
-        }
-
-        @Override
-        public void enter(@NotNull Mode previousMode) {
-            motor.setPower(power);
-        }
-
-        @Override
-        @NotNull
-        public Mode eval() {
-            Mode nextMode = switches.poll();
-            if (nextMode == null) return this;
-            else return nextMode;
-        }
-    }
-
+    private final Channel<MotionState> motionStates = linkedSingleChannel();
+    
+    // motor
+    private final DcMotorEx motor;
     // idle
-    private final Mode idle = new Mode() {
-        @Override
-        public void enter(@NotNull Mode previousMode) {
-            motor.setPower(0);
-        }
-
-        @Override
-        @NotNull
-        public Mode eval() {
-            Mode nextMode = switches.poll();
-            if (nextMode == null) return this;
-            else return nextMode;
-        }
-    };
-
-    // calculate the power from the position of the robot and the target position
-    private class Target implements Mode {
-        public final Pose target;
-
-        private Target(Pose target) {
-            this.target = target;
-        }
-
-        @Override
-        @NotNull
-        public Mode eval() {
+    private final Mode idle;
+    
+    public Shooter(Context ctx) {
+        motor = ctx.hardwareMap().get(DcMotorEx.class, "shooter");
+        motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        
+        // when you enter the idle mode, turn off the motor
+        idle = entranceMode(from -> motor.setPower(0));
+    }
+    
+    // a fixed power
+    private Mode fixedMode(double power) {
+        return entranceMode(from -> motor.setPower(power));
+    }
+    
+    // targeting a pose
+    private Mode targetMode(Vector2D target) {
+        return mode(self -> {
+            // we poll the motion states,
+            // so that we only do work when we get a new motion state
             MotionState motionState = motionStates.poll();
             if (motionState != null) {
+                // calculate the power from the position of the robot and the target position
                 motor.setPower(
                     0.1 + 0.001 * Math.hypot(
                         target.x() - motionState.pose().x(),
@@ -92,37 +50,32 @@ public class Shooter extends StateMachine {
                     )
                 );
             }
-            Mode nextMode = switches.poll();
-            if (nextMode == null) return this;
-            else return nextMode;
-        }
+            return self;
+        });
     }
-
-    // this event handler will forward motion state events to the shooter
-    private final EventManager.Handler<MotionState> motionStateForwarder = motionState -> {
-        motionStates.send(motionState);
-        // if the shooter finishes, remove this handler
-        if (fiber().status().alive()) return EventHandled.ok();
-        else return EventHandled.remove();
-    };
-
+    
     @Override
     @NotNull
     protected Mode init() {
         // we init into the idle mode
         return idle;
     }
-
+    
     // public api:
-    public void target(Pose pose) {
-        switches.send(new Target(pose));
+    
+    public void sendMotionState(MotionState motionState) {
+        motionStates.send(motionState);
     }
-
+    
+    public void target(Vector2D point) {
+        switchTo(targetMode(point));
+    }
+    
     public void idle() {
-        switches.send(idle);
+        switchTo(idle);
     }
-
+    
     public void fixed(double power) {
-        switches.send(new Fixed(power));
+        switchTo(fixedMode(power));
     }
 }

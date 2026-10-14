@@ -8,6 +8,7 @@ import com.pedropathing.revhub.localizers.PinpointConfig
 import com.pedropathing.revhub.localizers.PinpointLocalizer
 import com.qualcomm.robotcore.hardware.HardwareMap
 import dev.frozenmilk.dairy.mercurial.pedro.MercurialFollower
+import dev.frozenmilk.dairy.mercurial.pedro.MercurialLocalizer
 
 object Constants {
     val pinpointConfig = PinpointConfig { c ->
@@ -22,8 +23,11 @@ object Constants {
         // TODO: this is a stub!
     }
 
-    fun create(h: HardwareMap) = MercurialFollower(
+    fun createLocalizer(h: HardwareMap) = MercurialLocalizer(
         PinpointLocalizer(h, pinpointConfig),
+    )
+
+    fun createFollower(h: HardwareMap) = MercurialFollower(
         Mecanum(h, mecanumConfig),
         Foresight(foresightConfig),
     )

@@ -10,11 +10,8 @@ import com.pedropathing.api.PoseFactory;
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
 
-import org.firstinspires.ftc.teamcode.examplerobot.pedro.Constants;
-
 import dev.frozenmilk.dairy.mercurial.ftc.MercurialFTC;
 import dev.frozenmilk.dairy.mercurial.ftc.MercurialFTC.RegisterableProgram;
-import dev.frozenmilk.dairy.mercurial.pedro.MercurialFollower;
 import dev.frozenmilk.dairy.mercurial.processes.Fiber;
 import dev.frozenmilk.dairy.mercurial.processes.Spawnable;
 
@@ -27,20 +24,15 @@ public class Auto {
     private static final Path path2 = line(end, start);
 
     public static final RegisterableProgram auto = MercurialFTC.autonomous(ctx -> {
-        MercurialFollower pedro = Constants.create(ctx.hardwareMap());
-
-        pedro.localizer().setPose(start);
-
-        Drivetrain drivetrain = new Drivetrain(pedro);
-        Shooter shooter = new Shooter(ctx.hardwareMap(), pedro.localizationEventManager());
+        Robot r = new Robot(ctx);
+        r.localizer.setPose(start);
 
         Spawnable<?> program = expression((scope, _self) -> {
             // wait for the opmode to start
-            scope.run(waitUntil(ctx::isActive));
-            scope.runExec(() -> shooter.target(end));
+            scope.run(waitUntil(ctx::inLoop));
+            scope.run(r.drivetrain.followPathSync(path1, true));
             scope.run(waitFor.bind(seconds(10)));
-            scope.runExec(shooter::idle);
-            scope.run(drivetrain.followSync(path2, true));
+            scope.run(r.drivetrain.followPathSync(path2, true));
             return noop;
         }).spawnable();
 
@@ -53,6 +45,6 @@ public class Auto {
         // return into teleop
         // this will auto transition you into teleop
         // with the correctly set pose
-        return teleop(pedro.localizer().pose());
+        return teleop(r.localizer.pose());
     });
 }

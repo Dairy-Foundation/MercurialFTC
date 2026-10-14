@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.examplerobot
 
 import com.pedropathing.drivetrain.DrivePowers
+import com.pedropathing.follower.ManualDrive
 import com.pedropathing.localization.MotionState
 import com.pedropathing.math.Pose
 import com.pedropathing.paths.Path
@@ -9,223 +10,180 @@ import dev.frozenmilk.dairy.mercurial.continuations.Continuation.Builder
 import dev.frozenmilk.dairy.mercurial.continuations.Continuations.exec
 import dev.frozenmilk.dairy.mercurial.continuations.Continuations.expression
 import dev.frozenmilk.dairy.mercurial.continuations.Continuations.receive
-import dev.frozenmilk.dairy.mercurial.continuations.Continuations.value
-import dev.frozenmilk.dairy.mercurial.pedro.MercurialFollower
+import dev.frozenmilk.dairy.mercurial.ftc.Context
 import dev.frozenmilk.dairy.mercurial.processes.Channel
-import dev.frozenmilk.dairy.mercurial.processes.Channel.Companion.tryPoll
-import dev.frozenmilk.dairy.mercurial.processes.EventManager
-import dev.frozenmilk.dairy.mercurial.processes.StateMachine
-import java.util.function.BooleanSupplier
-import java.util.function.Supplier
+import dev.frozenmilk.dairy.mercurial.processes.SwitchedStateMachine
+import org.firstinspires.ftc.teamcode.examplerobot.pedro.Constants
 import kotlin.time.TimeMark
 
-class Drivetrain(val pedro: MercurialFollower) : StateMachine() {
-    // we need some channels for communicating with the drivetrain
-    // drive powers are manual drive inputs
-    private val drivePowers = Channel.single<DrivePowers>()
+class Drivetrain(ctx: Context) : SwitchedStateMachine() {
+    // create the follower helper, which has a pedro drivetrain and algorithm
+    private val follower = Constants.createFollower(ctx.hardwareMap)
 
-    // and motion states are updates from the localiser
-    private val motionStates = Channel.single<MotionState>()
+    // localization updates
+    private val motionStates = linkedSingleChannel<MotionState>()
 
-    // we add our own mode switching system, which will come in over this channel
-    // we will just send the mode directly to the drivetrain when we want it to switch
-    private val switches = Channel.single<Mode>()
+    // driver inputs
+    private val drivePowers = linkedSingleChannel<DrivePowers>()
 
-    // lets set up some modes, this tutorial will just add the 4 pedro modes
-    private val manual: Mode = object : Mode {
-        override fun eval(): Mode {
-            // if there are drive powers, we use the pedro helper to drive the robot
-            drivePowers.tryPoll { powers ->
-                pedro.manual(powers)
-            }
+    // Mercurial does not use telemetry the same way the SDK does
+    // instead, you retain the entry, and update the value over time
+    private val stateTelemetry = ctx.telemetry.addData("Drivetrain/State", "unknown")
 
-            // either switch to a new mode, or continue doing this
-            return switches.poll() ?: this
-        }
+    // constant modes
+
+    // the idle mode just stops the robot when you enter it
+    private val idle: Mode = entranceMode { _ ->
+        stateTelemetry.setValue("idle")
+        follower.idle()
     }
 
-    private val idle: Mode = object : Mode {
-        // when we enter idle, we want to stop the drivetrain
-        // this helper will do so for us
-        override fun enter(previousMode: Mode) = pedro.idle()
-        override fun eval(): Mode {
-            // except for switching modes
-            return switches.poll() ?: this
+    // field centric uses the most recent motion state data to drive the robot
+    private val fieldCentric: Mode = mode { self ->
+        stateTelemetry.setValue("field centric")
+        // consume the next inputs from the driver
+        val input = drivePowers.poll()
+        // we only query motion states, which doesn't remove the data
+        val motionState = motionStates.query()
+
+        if (input != null && motionState != null) {
+            // calculate the field centric inputs
+            val fieldCentricInput = ManualDrive.fieldCentric(
+                input,
+                motionState.pose().heading()
+            )
+            // drive!
+            follower.manual(fieldCentricInput)
         }
+        self
     }
 
-    // unlike manual and idle, hold and follow have some extra data
-    // so we will make them inner classes instead
+    // parametric modes
 
-    private inner class Hold(
-        // we need the pose to hold at
-        val pose: Pose,
-        // if to use scaling
-        val useScaling: Boolean,
-        // the timeMark is to tell us how long has passed since last update
-        // you don't need to worry about it much
-        val timeMark: TimeMark? = null,
-    ) : Mode {
-        override fun eval(): Mode {
-            // but hold uses localisation updates
-            motionStates.tryPoll { motionStates ->
-                // the helper for holding is a bit more complex
-                // it returns the next timeMark for use to use
-                val nextTimeMark = pedro.hold(
-                    pose,
-                    useScaling,
-                    motionStates,
-                    timeMark,
+    private fun holdPoseMode(timeMark: TimeMark?, pose: Pose): Mode = mode { self ->
+        stateTelemetry.setValue("holding pose")
+
+        // we poll the motion state,
+        // so that we only update when a new motion state arrives
+        val motionState = motionStates.poll()
+
+        // if there is a new motion state
+        if (motionState != null) {
+            // we calculate an update
+            val nextTimeMark = follower.hold(
+                pose,
+                true,
+                motionState,
+                timeMark
+            )
+            return@mode holdPoseMode(nextTimeMark, pose)
+        }
+        self
+    }
+
+    private fun holdPoseMode(pose: Pose): Mode = holdPoseMode(null, pose)
+
+    private fun followPathMode(
+        timeMark: TimeMark?,
+        holdEnd: Boolean,
+        tracker: PathTracker,
+        resultChannel: Channel<FollowResult>?
+    ): Mode = egressMode(
+        // eval
+        { self ->
+            stateTelemetry.setValue("following path")
+
+            // we poll the motion state,
+            // so that we only update when a new motion state arrives
+            val motionState = motionStates.poll()
+            if (motionState != null) {
+                val nextTimeMark = follower.follow(
+                    tracker,
+                    motionState,
+                    timeMark
                 )
-                // so we need to go into a new version of hold
-                return switches.poll() ?: Hold(
-                    pose,
-                    useScaling,
+                // follower.follow will return null when its finished
+                if (nextTimeMark == null) {
+                    // tell the awaiting process to move on!
+                    resultChannel?.sendIfEmpty(FollowResult.Ok)
+                    // if hold end, move to holding the end
+                    if (holdEnd) holdPoseMode(tracker.endPose())
+                    else idle
+                } else followPathMode(
                     nextTimeMark,
+                    holdEnd,
+                    tracker,
+                    resultChannel
                 )
-            }
-            // we use the same switching logic
-            return switches.poll() ?: this
-        }
-    }
+            } else self
+        },
+        // exit
+        {
+            // this function gets run when we exit following due to a switch
+            resultChannel?.sendIfEmpty(FollowResult.Cancelled)
+            // make sure to release the tracker
+            tracker.release()
+        },
+    )
 
+    private fun followPathMode(
+        holdEnd: Boolean,
+        path: Path,
+        resultChannel: Channel<FollowResult>?
+    ) = followPathMode(null, holdEnd, PathTracker(path), resultChannel)
+
+    // you might want to add more results, like timedout
     enum class FollowResult {
-        Finished,
+        Ok,
         Cancelled,
     }
 
-    // follow is the most complex
-    private inner class Follow(
-        // when a different bit of code asks us to follow a path
-        // it may want to know when we are finished
-        // so it can give us a response channel
-        // this is optional
-        val respondTo: Channel<FollowResult>?,
-        // the path tracker is part of pedro
-        val pathTracker: PathTracker,
-        // if to hold the end position afterward
-        val holdEnd: Boolean,
-        // the same time mark as hold
-        val timeMark: TimeMark? = null,
-    ) : Mode {
-        // this constructor converts paths to path trackers
-        // you will use it more
-        constructor(
-            respondTo: Channel<FollowResult>?,
-            path: Path,
-            holdEnd: Boolean,
-        ) : this(
-            respondTo,
-            PathTracker(path),
-            holdEnd,
-        )
-
-        override fun eval(): Mode {
-            // the follow helper is the most complex
-            motionStates.tryPoll { motionState ->
-                val nextTimeMark = pedro.follow(
-                    pathTracker,
-                    motionState,
-                    timeMark,
-                )
-                // the helper will return null if the tracker is finished
-                return if (nextTimeMark === null) {
-                    // let the caller know that we have finished successfully
-                    respondTo?.send(FollowResult.Finished)
-
-                    switches.poll() ?:
-                    // if hold end is true, we need to switch to hold
-                    if (holdEnd) Hold(pathTracker.endPose(), true)
-                    // otherwise we idle
-                    else idle
-                }
-                // if the tracker didn't finish, then we keep going
-                else {
-                    val switch = switches.poll()
-                    return if (switch !== null) {
-                        // release the path tracker
-                        pathTracker.release()
-                        // let the caller know that we didn't complete following the path
-                        respondTo?.send(FollowResult.Cancelled)
-                        // return the new mode
-                        switch
-                    }
-                    else Follow(respondTo, pathTracker, holdEnd, nextTimeMark)
-                }
-            }
-            val switch = switches.poll()
-            return if (switch !== null) {
-                // release the path tracker
-                pathTracker.release()
-                // let the caller know that we didn't complete following the path
-                respondTo?.send(FollowResult.Cancelled)
-                // return the new mode
-                switch
-            } else this
-        }
-    }
-
-    // this event handler will forward motion state events to the drivetrain
-    private val motionStateForwarder = object : EventManager.Handler<MotionState> {
-        override fun handleEvent(event: MotionState): EventManager.EventHandled<MotionState> {
-            motionStates.send(event)
-            // if the drivetrain finishes, remove this handler
-            return if (fiber.status.alive) EventManager.EventHandled.Ok
-            else EventManager.EventHandled.Remove
-        }
-    }
-
-    init {
-        // we tell the localiser to send events to us
-        pedro.localizationEventManager.addHandler(motionStateForwarder)
-    }
-
+    // init into idle
     override fun init(): Mode {
-        // we init into the idle mode
         return idle
     }
 
-    // NOTE:
-    // everything so far is a suggestion
-    // you might want to make it that following or holding can be cancelled by incoming driver powers
-    // or add another mode to use a pid controller for aiming the robot while manually driving
-    // or add slow mode instructions over another channel
-    // there is no "correct" way to do this in mercurial, you can take this and adjust it to your needs
+    // public api
+    fun sendPowers(powers: DrivePowers) {
+        drivePowers.send(powers)
+    }
 
-    // public api:
-    fun manual() {
-        switches.send(manual)
+    fun sendPowers(forward: Double, strafe: Double, turn: Double) {
+        drivePowers.send(DrivePowers(forward, strafe, turn))
+    }
+
+    fun sendMotionState(motionState: MotionState) {
+        motionStates.send(motionState)
+    }
+
+    fun fieldCentric() {
+        switchTo(fieldCentric)
     }
 
     fun idle() {
-        switches.send(idle)
+        switchTo(idle)
     }
 
-    fun hold(pose: Pose, useScaling: Boolean) {
-        switches.send(Hold(pose, useScaling))
+    fun holdPose(pose: Pose) {
+        switchTo(holdPoseMode(pose))
     }
 
-    fun followAsync(path: Path, holdEnd: Boolean) {
-        switches.send(Follow(null, path, holdEnd))
+    fun followPathAsync(
+        path: Path,
+        holdEnd: Boolean,
+        resultChannel: Channel<FollowResult>? = null,
+    ) {
+        switchTo(followPathMode(holdEnd, path, resultChannel))
     }
 
-    fun followAsync(respondTo: Channel<FollowResult>, path: Path, holdEnd: Boolean) {
-        switches.send(Follow(respondTo, path, holdEnd))
-    }
-
-    fun followSync(path: Supplier<Path>, holdEnd: BooleanSupplier): Builder<FollowResult> =
-        expression {
+    fun followPathSync(path: Path, holdEnd: Boolean): Builder<FollowResult?> {
+        return expression { _ ->
+            // local channel variable
             val channel = o { Channel.single<FollowResult>() }
-            !exec { switches.send(Follow(channel(), path.get(), holdEnd.asBoolean)) }
-            receive<FollowResult>()
-                .receive(channel) { result -> value.o(result) }
+            // run async
+            !exec { followPathAsync(path, holdEnd, channel()) }
+
+            receive<FollowResult>().receive(channel)
         }
-
-    fun followSync(path: Path, holdEnd: BooleanSupplier) = followSync({ path }, holdEnd)
-    fun followSync(path: Supplier<Path>, holdEnd: Boolean) = followSync(path) { holdEnd }
-    fun followSync(path: Path, holdEnd: Boolean) = followSync({ path }, { holdEnd })
-
-    fun sendPowers(drivePowers: DrivePowers) {
-        this.drivePowers.send(drivePowers)
     }
 }

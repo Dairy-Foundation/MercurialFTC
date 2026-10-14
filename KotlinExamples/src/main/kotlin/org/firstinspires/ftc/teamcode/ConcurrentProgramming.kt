@@ -21,6 +21,7 @@ import dev.frozenmilk.dairy.mercurial.continuations.Continuations.waitFor
 import dev.frozenmilk.dairy.mercurial.environments.Reference
 import dev.frozenmilk.dairy.mercurial.processes.Channel
 import dev.frozenmilk.dairy.mercurial.processes.Channel.Companion.tryPoll
+import dev.frozenmilk.dairy.mercurial.processes.Channel.Companion.tryQuery
 import dev.frozenmilk.dairy.mercurial.processes.ExitReason
 import dev.frozenmilk.dairy.mercurial.processes.Fiber
 import dev.frozenmilk.dairy.mercurial.processes.Messages
@@ -33,6 +34,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
 import kotlin.time.TimeSource
 
+@Suppress("unused")
 class ConcurrentProgramming {
     // setup and the scheduler
     init {
@@ -45,14 +47,16 @@ class ConcurrentProgramming {
         Mercurial.initialiseThread()
         // you can pass a settings object to change some global settings
         // these are the default settings
-        Mercurial.initialiseThread(Mercurial.Settings(
-            // the time source used by all of Mercurial
-            timeSource = TimeSource.Monotonic,
-            // controls if retracing of exceptions is enabled
-            stackTraces = true,
-            // the scheduler
-            scheduler = Scheduler.Standard(),
-        ))
+        Mercurial.initialiseThread(
+            Mercurial.Settings(
+                // the time source used by all of Mercurial
+                timeSource = TimeSource.Monotonic,
+                // controls if retracing of exceptions is enabled
+                stackTraces = true,
+                // the scheduler
+                scheduler = Scheduler.Standard(),
+            )
+        )
 
         // you can access these values from Mercurial
         val scheduler = Mercurial.scheduler
@@ -91,12 +95,29 @@ class ConcurrentProgramming {
         // and remove that message from the channel
         val aWord: String? = word.poll()
 
+        // query is like poll, but doesn't remove
+        // this is useful for holding the most recent value with a single channel
+        val bWord: String? = word.query()
+
         // you can also send a message to the back of the channel
         word.send("Hello")
 
         // generally you should only be sending messages to the back of the channel
         // sometimes you need to put a message at the front
         word.prepend("World")
+
+        // sendIfEmpty and prependIfEmpty do as they say
+        word.sendIfEmpty("Bird")
+        word.prependIfEmpty("Bird")
+
+        // once you're done with a channel you can close it
+        word.close()
+
+        // once a channel is closed it won't receive new messages
+        // this can also signal to the other end of the channel that the current end is finished with it
+
+        // you can check if a channel is open to react to its state
+        val _ = word.open
 
         // once again, for a single channel, sending two messages in a row will erase the first one
         // but not so for a queue
@@ -107,6 +128,14 @@ class ConcurrentProgramming {
         word.tryPoll { word: String ->
             println(word)
         }
+
+        // there is also tryQuery
+        word.tryQuery { word: String ->
+            println(word)
+        }
+
+        // channels are only suitable for a single receiver,
+        // and Mercurial has other systems for forwarding messages to multiple channels
 
         // we will use channels more later
         // now, lets look at ways to start running top level programs
@@ -450,6 +479,10 @@ class ConcurrentProgramming {
             )
         }.spawnable().spawnLink()
 
+        // you can also link and unlink channels
+        // this will auto close the pingChannel when ping exits
+        pingChannel.link(ping)
+
         val pong: Fiber<Any?> = expression {
             // this will receive three pongs
             // and respond to ping each time
@@ -465,6 +498,10 @@ class ConcurrentProgramming {
             )
         }.spawnable().spawnLink()
 
+        // you can also link and unlink channels
+        // this will auto close the pingChannel when ping exits
+        pongChannel.link(pong)
+
         // now the two programs will run and message back and forth
         // we just need to send the first message to start it!
         pingChannel.send(Unit)
@@ -475,7 +512,7 @@ class ConcurrentProgramming {
         // this receive will wait until a message comes in on the words channel
         // and then will return it
         val program1 = receive<String>()
-            .receive(words) { word -> value.o(word) }
+            .receive(words)
 
         // let's look at some more complex receives
 
@@ -487,14 +524,20 @@ class ConcurrentProgramming {
             .receive({ numbers }, exec { println("got a number!") })
             // you can add guards to determine if you do want to receive the message or not
             .receive({ numbers }, { i -> i > 5 }, exec { println("got a number larger than 5!") })
+            // sometimes, you need to work with or transform the value quickly
+            // receiveMap will do a single step
+            .receiveMap({ numbers }, { i ->
+                println("got ${i}!")
+            })
+            // more complex cases can use receiveFunction
             // you can also pass a function to store the message
-            .receive({ numbers }, function { _, i ->
+            .receiveFunction({ numbers }, function { _, i ->
                 exec { println("got ${i()}!") }
             })
-            // and receive has a helper form that makes the function for you
-            .receive({ numbers }, { i -> exec { println("got ${i()}!") } })
+            // and receiveFunction has a helper form that makes the function for you
+            .receiveFunction({ numbers }, { i -> exec { println("got ${i()}!") } })
             // and of course you can combine all if it together!
-            .receive(numbers, { i -> i > 5 }, { i -> exec { println("got ${i()}!") } })
+            .receiveFunction(numbers, { i -> i > 5 }, { i -> exec { println("got ${i()}!") } })
             // if you think there might not be any messages in any of the channels
             // you can use or with a guard
             .or({ false }, exec { println("nothing!") })
@@ -506,7 +549,7 @@ class ConcurrentProgramming {
         val downs = Channel.queue<Messages.Down>()
 
         val program3 = receive<Any?>()
-            .receive(downs) { down ->
+            .receiveFunction(downs) { down ->
                 exec { println("fiber ${down().from} downed because ${down().reason}") }
             }
             // if you don't specify a default or,
@@ -514,8 +557,8 @@ class ConcurrentProgramming {
             // to help work around this, you can specify a timeout with after.
             // after uses the same time helper functions we saw earlier
             .after(duration { 10.seconds }, exec { println("timed out") })
-            // you can only have one after
-            // specifying another one will remove the current one
+        // you can only have one after
+        // specifying another one will remove the current one
     }
 
     // timers

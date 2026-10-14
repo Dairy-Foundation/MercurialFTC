@@ -1,71 +1,73 @@
 package org.firstinspires.ftc.teamcode.examplerobot;
 
-import com.pedropathing.follower.ManualDrive;
 import com.pedropathing.math.Pose;
-
-import org.firstinspires.ftc.teamcode.examplerobot.pedro.Constants;
+import com.pedropathing.math.Vector2D;
 
 import dev.frozenmilk.dairy.mercurial.ftc.GamepadD;
 import dev.frozenmilk.dairy.mercurial.ftc.MercurialFTC;
 import dev.frozenmilk.dairy.mercurial.ftc.MercurialFTC.RegisterableProgram;
-import dev.frozenmilk.dairy.mercurial.pedro.MercurialFollower;
 import dev.frozenmilk.dairy.mercurial.processes.EventManager;
-import dev.frozenmilk.dairy.mercurial.processes.EventManager.EventHandled;
 
 @SuppressWarnings("unused")
 public class Teleop {
-    private static final Pose targetA = new Pose(0.0, 10.0);
-    private static final Pose targetB = new Pose(100.0, 10.0);
-
+    private static final Vector2D targetA = Vector2D.cartesian(0.0, 10.0);
+    private static final Vector2D targetB = Vector2D.cartesian(100.0, 10.0);
+    
+    // standard teleop
+    public static final RegisterableProgram teleop = teleop(new Pose(72.0, 72.0));
+    
     public static RegisterableProgram teleop(Pose pose) {
         return MercurialFTC.teleop(ctx -> {
-            MercurialFollower pedro = Constants.create(ctx.hardwareMap());
-
-            pedro.localizer().setPose(pose);
-
-            Drivetrain drivetrain = new Drivetrain(pedro);
-            Shooter shooter = new Shooter(ctx.hardwareMap(), pedro.localizationEventManager());
-
+            Robot r = new Robot(ctx);
+            r.localizer.setPose(pose);
+            
             EventManager.Handler<GamepadD.Delta> drivetrainInputHandler =
-                GamepadD.gamepad1Handler(event -> {
-                    drivetrain.sendPowers(
-                        ManualDrive.fieldCentric(
+                // filter for gamepad 1
+                GamepadD.gamepad1Handler(
+                    // send driver inputs to drivetrain
+                    EventManager.forwardTo(r.drivetrain, event ->
+                        r.drivetrain.sendPowers(
                             -event.leftStickY(),
                             event.leftStickX(),
-                            event.rightStickX(),
-                            pedro.localizer().pose().heading()
-                            )
-                    );
-                    if (!drivetrain.fiber().status().alive()) return EventHandled.remove();
-                    else return EventHandled.ok();
-                });
-
-            // and this only gets gamepad2 events
+                            event.rightStickX()
+                        )
+                    )
+                );
+            
             EventManager.Handler<GamepadD.Delta> shooterInputHandler =
-                GamepadD.gamepad2Handler(event -> {
-                    if (event.aWasPressed()) shooter.target(targetA);
-                    else if (event.bWasPressed()) shooter.target(targetB);
-                    else if (event.xWasPressed()) shooter.idle();
-
-                    if (!shooter.fiber().status().alive()) return EventHandled.remove();
-                    else return EventHandled.ok();
-                });
-
+                // filter for gamepad 2
+                GamepadD.gamepad2Handler(
+                    // consume driver inputs to control the shooter
+                    EventManager.forwardTo(r.shooter, event -> {
+                        if (event.aWasPressed()) r.shooter.target(targetA);
+                        else if (event.bWasPressed()) r.shooter.target(targetB);
+                        else if (event.xWasPressed()) r.shooter.idle();
+                    })
+                );
+            
+            EventManager.Handler<GamepadD.Delta> intakeInputHandler =
+                // filter for gamepad 2
+                GamepadD.gamepad2Handler(
+                    // consume driver inputs to control the intake
+                    EventManager.forwardTo(r.intake, event -> {
+                        if (event.rightTriggerPassedOver(0.1)) r.intake.switchOn();
+                        else if (event.rightTriggerPassedUnder(0.1)) r.intake.switchOff();
+                    })
+                );
+            
             // wait for start
             ctx.waitForStart();
-
+            
             // install handlers
-            ctx.gamepadD().addHandler(shooterInputHandler);
             ctx.gamepadD().addHandler(drivetrainInputHandler);
-
+            ctx.gamepadD().addHandler(shooterInputHandler);
+            ctx.gamepadD().addHandler(intakeInputHandler);
+            
             // yield remainder of opmode to the scheduler
             ctx.dropToScheduler();
-
+            
             // return null, we won't transition to another opmode after teleop
             return null;
         });
     }
-
-    // standard teleop
-    public static final RegisterableProgram teleop = teleop(new Pose(0.0, 0.0));
 }

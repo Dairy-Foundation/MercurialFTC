@@ -9,25 +9,31 @@ import com.pedropathing.revhub.localizers.PinpointLocalizer;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import dev.frozenmilk.dairy.mercurial.pedro.MercurialFollower;
+import dev.frozenmilk.dairy.mercurial.pedro.MercurialLocalizer;
 
 public class Constants {
     private static final PinpointConfig pinpointConfig = new PinpointConfig(c -> {
         c.name.set("pinpoint");
         // TODO: this is a stub!
     });
-    private static final MecanumConfig mecanumConfig = new MecanumConfig (c -> {
+    private static final MecanumConfig mecanumConfig = new MecanumConfig(c -> {
         c.backLeftName.set("bl");
         // TODO: this is a stub!
     });
-    private static final ForesightConfig foresightConfig = new ForesightConfig (c -> {
+    private static final ForesightConfig foresightConfig = new ForesightConfig(c -> {
         // TODO: this is a stub!
     });
-
-    public static MercurialFollower create(HardwareMap h) {
+    
+    public static MercurialFollower createFollower(HardwareMap h) {
         return new MercurialFollower(
-            new PinpointLocalizer(h, pinpointConfig),
             new Mecanum(h, mecanumConfig),
             new Foresight(foresightConfig)
+        );
+    }
+    
+    public static MercurialLocalizer createLocalizer(HardwareMap h) {
+        return new MercurialLocalizer(
+            new PinpointLocalizer(h, pinpointConfig)
         );
     }
 }

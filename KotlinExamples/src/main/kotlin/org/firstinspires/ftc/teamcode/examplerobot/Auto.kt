@@ -1,40 +1,33 @@
 package org.firstinspires.ftc.teamcode.examplerobot
 
-import com.pedropathing.api.Paths.line
+import com.pedropathing.api.Paths
 import com.pedropathing.api.PoseFactory
-import dev.frozenmilk.dairy.mercurial.continuations.Continuations.exec
+import com.pedropathing.math.Pose
+import com.pedropathing.paths.Path
 import dev.frozenmilk.dairy.mercurial.continuations.Continuations.expression
 import dev.frozenmilk.dairy.mercurial.continuations.Continuations.noop
 import dev.frozenmilk.dairy.mercurial.continuations.Continuations.seconds
 import dev.frozenmilk.dairy.mercurial.continuations.Continuations.waitFor
 import dev.frozenmilk.dairy.mercurial.continuations.Continuations.waitUntil
-import dev.frozenmilk.dairy.mercurial.ftc.MercurialFTC
-import org.firstinspires.ftc.teamcode.examplerobot.pedro.Constants
-
+import dev.frozenmilk.dairy.mercurial.ftc.MercurialFTC.autonomous
 
 private val p = PoseFactory.degrees()
-private val start = p.of(24.0, 24.0, 0.0)
-private val end = p.of(48.0, 48.0, 90.0)
-private val path1 = line(start, end)
-private val path2 = line(end, start)
+private val start: Pose = p.of(24.0, 24.0, 0.0)
+private val end: Pose = p.of(48.0, 48.0, 90.0)
+private val path1: Path = Paths.line(start, end)
+private val path2: Path = Paths.line(end, start)
 
 @Suppress("unused")
-val auto = MercurialFTC.autonomous {
-    val pedro = Constants.create(hardwareMap)
+val auto = autonomous {
+    val r = Robot(this)
+    r.localizer.setPose(start)
 
-    pedro.localizer.setPose(start)
-
-    val drivetrain = Drivetrain(pedro)
-    val shooter = Shooter(hardwareMap, pedro.localizationEventManager)
-
-    val program = expression {
+    val program = expression { _ ->
         // wait for the opmode to start
-        !waitUntil(::isActive)
-        !drivetrain.followSync(path1, true)
-        !exec { shooter.target(end) }
-        !(waitFor * seconds { 10.0 })
-        !exec { shooter.idle() }
-        !drivetrain.followSync(path2, true)
+        !waitUntil(::inLoop)
+        !r.drivetrain.followPathSync(path1, true)
+        !(waitFor * seconds(10.0))
+        !r.drivetrain.followPathSync(path2, true)
         noop
     }.spawnable()
 
@@ -44,8 +37,6 @@ val auto = MercurialFTC.autonomous {
     // yield remainder of auto to the scheduler
     dropToScheduler()
 
-    // return into teleop
-    // this will auto transition you into teleop
-    // with the correctly set pose
-    teleop(pedro.localizer.pose())
+    // switch straight into teleop
+    teleop(r.localizer.pose())
 }
