@@ -39,9 +39,9 @@ object MercurialProgramScanner : OpModeScanner() {
 
                 registrationHelper.register(metadata) {
                     MercurialOpMode(
-                        metadata.name,
                         metadata,
                         0,
+                        registerableProgram.program,
                         registerableProgram.program,
                     )
                 }
@@ -66,9 +66,9 @@ object MercurialProgramScanner : OpModeScanner() {
 
             registrationHelper.register(metadata) {
                 MercurialOpMode(
-                    metadata.name,
                     metadata,
                     0,
+                    registerableProgram.program,
                     registerableProgram.program,
                 )
             }
