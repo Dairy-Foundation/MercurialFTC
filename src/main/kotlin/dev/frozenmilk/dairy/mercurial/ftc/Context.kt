@@ -57,13 +57,19 @@ open class Context(
      * puts the opmode into scheduler mode until start is pressed
      */
     fun waitForStart() {
-        while (inInit) scheduler.poll()
+        while (inInit) {
+            scheduler.poll()
+            telemetry.update()
+        }
     }
 
     /**
      * puts the opmode into scheduler mode until it stops
      */
     fun dropToScheduler() {
-        while (isActive) scheduler.poll()
+        while (isActive) {
+            scheduler.poll()
+            telemetry.update()
+        }
     }
 }
