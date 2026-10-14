@@ -19,7 +19,7 @@ ftc {
 
     dairy {
         api(Sloth("0.3.2"))
-        api(Mercurial("2.0.1-beta0"))
+        api(Mercurial("2.0.1-beta1"))
     }
 }
 
