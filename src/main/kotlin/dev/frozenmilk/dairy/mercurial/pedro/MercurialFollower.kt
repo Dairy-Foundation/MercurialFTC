@@ -3,36 +3,19 @@ package dev.frozenmilk.dairy.mercurial.pedro
 import com.pedropathing.algorithm.Algorithm
 import com.pedropathing.drivetrain.DrivePowers
 import com.pedropathing.drivetrain.Drivetrain
-import com.pedropathing.localization.Localizer
 import com.pedropathing.localization.MotionState
 import com.pedropathing.math.Pose
 import com.pedropathing.paths.PathTracker
 import dev.frozenmilk.dairy.mercurial.Mercurial
-import dev.frozenmilk.dairy.mercurial.continuations.Continuation
-import dev.frozenmilk.dairy.mercurial.processes.EventManager
-import dev.frozenmilk.dairy.mercurial.processes.Spawnable
 import kotlin.time.DurationUnit
 import kotlin.time.TimeMark
 
 class MercurialFollower(
-    @get:JvmName("localizer")
-    val localizer: Localizer,
     @get:JvmName("drivetrain")
     val drivetrain: Drivetrain,
     @get:JvmName("algorithm")
     val algorithm: Algorithm,
 ) {
-    @get:JvmName("localizationEventManager")
-    val localizationEventManager = EventManager<MotionState>()
-    @get:JvmName("localizerFiber")
-    val localizerFiber = Spawnable.Builder<Nothing>(object : Continuation {
-        override fun eval() = run {
-            localizer.update()
-            localizationEventManager.notify(localizer.state())
-            this
-        }
-    }).spawnLink()
-
     fun manual(powers: DrivePowers) = drivetrain.drive(powers, true)
     fun idle() = drivetrain.stop()
 
